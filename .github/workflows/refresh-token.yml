@@ -1,0 +1,36 @@
+name: Refresh Threads token
+
+on:
+  schedule:
+    # 매주 월요일 09:30 KST. Threads 장기 토큰(60일)을 다시 60일로 연장
+    - cron: "30 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Refresh and save token
+        env:
+          TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$GH_TOKEN" ]; then
+            echo "THREADS_ACCESS_TOKEN 또는 GH_PAT 시크릿이 없어 건너뜀"
+            exit 0
+          fi
+          resp=$(curl -sS -G "https://graph.threads.net/refresh_access_token" \
+            --data-urlencode "grant_type=th_refresh_token" \
+            --data-urlencode "access_token=$TOKEN")
+          new=$(echo "$resp" | jq -r '.access_token // empty')
+          if [ -z "$new" ]; then
+            echo "토큰 연장 실패: $(echo "$resp" | jq -c 'del(.access_token)')"
+            exit 1
+          fi
+          echo "::add-mask::$new"
+          gh secret set THREADS_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY" --body "$new"
+          echo "토큰 연장 완료. 남은 기간(초): $(echo "$resp" | jq -r .expires_in)"
