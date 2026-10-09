@@ -1,10 +1,10 @@
 # threads-daily-post
 
-Threads **@jinggle_m** 자동 게시 봇. 컴퓨터가 꺼져 있어도 GitHub 서버에서 실행돼요.
+Threads **@jinggle_m** 게시 도구. 자동 게시하지 않고, 사용자 승인을 받은 뒤에만 수동으로 실행해요.
 
 ## 하는 일
 
-- 매일 10시~22시(한국 시간) 사이 무작위 시간에 **하루 1개**만 게시
+- 게시 일정 자동 실행 없음. 초안을 확인하고 승인한 뒤에만 **하루 최대 1개** 게시
 - Gemini 무료 등급 + Google 검색으로 요즘 유행하는 밈을 찾아 일상 글 작성
 - Cloudflare Workers AI 무료 할당량(FLUX.1 schnell)으로 폰으로 찍은 듯한 새 사진 생성 (남의 사진, 짤 원본은 사용 안 함)
 - 전부 무료 범위 안에서 동작 (결제 등록 불필요)
@@ -25,7 +25,7 @@ Threads **@jinggle_m** 자동 게시 봇. 컴퓨터가 꺼져 있어도 GitHub �
 
 ## 사용법
 
-- **테스트:** Actions > Daily Threads post > Run workflow > `dry_run` (글과 사진만 만들고 게시 안 함, 결과는 Artifacts)
-- **지금 바로 게시:** Run workflow > `force` (그래도 하루 1개 제한은 지킴)
+- **초안 생성:** Actions > Daily Threads post > Run workflow > `dry_run` (글과 사진만 만들고 게시 안 함, 결과는 Artifacts)
+- **승인 후 게시:** 사용자가 해당 초안을 명확히 승인한 뒤에만 Run workflow > `force` (하루 1개 제한 유지)
 - **잠시 멈추기:** Actions > Daily Threads post > `...` > Disable workflow
 - 게시 기록과 사진은 `posts/` 폴더에 날짜별로 저장됨
