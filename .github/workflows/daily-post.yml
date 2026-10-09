@@ -30,6 +30,8 @@ jobs:
         env:
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           EXPECTED_USERNAME: jinggle_m
           RUN_MODE: ${{ github.event.inputs.mode || 'auto' }}
           TEXT_MODEL: ${{ vars.TEXT_MODEL }}
