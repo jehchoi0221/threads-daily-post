@@ -4,8 +4,9 @@
 Runs on GitHub Actions (hourly between 10:00 and 22:00 KST).
 - Posts at most ONE post per KST day, at a random time.
 - Only publishes posts. Never follows, likes, comments, replies or reposts.
-- Text: Gemini + Google Search (finds a current Korean meme/trend).
-- Image: Gemini image model (new casual smartphone-style photo, no reused photos).
+- Text: Gemini free tier + Google Search (finds a current Korean meme/trend).
+- Image: Cloudflare Workers AI FLUX.1 schnell, free daily allocation
+  (new casual smartphone-style photo, no reused photos).
 """
 import base64
 import datetime
@@ -25,7 +26,8 @@ GRAPH = "https://graph.threads.net/v1.0"
 GEMINI = "https://generativelanguage.googleapis.com/v1beta/models"
 
 TEXT_MODEL = os.environ.get("TEXT_MODEL") or "gemini-2.5-flash"
-IMAGE_MODEL = os.environ.get("IMAGE_MODEL") or "gemini-3.1-flash-image"
+IMAGE_MODEL = os.environ.get("IMAGE_MODEL") or "@cf/black-forest-labs/flux-1-schnell"
+CF_API = "https://api.cloudflare.com/client/v4/accounts"
 FIRST_HOUR = int(os.environ.get("POST_FIRST_HOUR_KST") or 10)
 LAST_HOUR = int(os.environ.get("POST_LAST_HOUR_KST") or 22)
 EXPECTED_USERNAME = (os.environ.get("EXPECTED_USERNAME") or "jinggle_m").lower()
@@ -206,26 +208,28 @@ def write_post(today, key):
     raise RuntimeError(f"글 생성 실패: {last_err}")
 
 
-def make_image(image_prompt, key):
+def make_image(image_prompt):
+    account = os.environ.get("CF_ACCOUNT_ID", "").strip()
+    cf_token = os.environ.get("CF_API_TOKEN", "").strip()
     prompt = (
         image_prompt.strip()
         + "\n\nStyle: an ordinary, slightly imperfect handheld smartphone photo taken by a regular person "
         "in Korea, natural indoor or outdoor light, casual framing, realistic textures and proportions, "
         "natural colors, not a studio or advertising shot. "
         "Strictly no text, letters, captions, logos, brands, watermarks, cartoon characters, "
-        "or recognizable human faces. Portrait 4:5."
+        "or recognizable human faces."
+    )[:2000]
+    body = {"prompt": prompt, "steps": 8, "seed": random.randint(1, 2**31 - 1)}
+    r = http(
+        "POST",
+        f"{CF_API}/{account}/ai/run/{IMAGE_MODEL}",
+        data=body,
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {cf_token}"},
     )
-    body = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"responseModalities": ["TEXT", "IMAGE"], "imageConfig": {"aspectRatio": "4:5"}},
-    }
-    r = gemini(IMAGE_MODEL, body, key)
-    for p in r.get("candidates", [{}])[0].get("content", {}).get("parts", []):
-        d = p.get("inlineData") or p.get("inline_data")
-        if d and d.get("data"):
-            mime = d.get("mimeType") or d.get("mime_type") or "image/png"
-            return base64.b64decode(d["data"]), ("jpg" if "jpeg" in mime else "png")
-    raise RuntimeError("이미지가 생성되지 않음: " + json.dumps(r, ensure_ascii=False)[:500])
+    img_b64 = (r.get("result") or {}).get("image")
+    if not img_b64:
+        raise RuntimeError("이미지가 생성되지 않음: " + json.dumps(r, ensure_ascii=False)[:500])
+    return base64.b64decode(img_b64), "jpg"
 
 
 # ---------------- git helpers ----------------
@@ -288,8 +292,9 @@ def main():
 
     token = os.environ.get("THREADS_ACCESS_TOKEN", "").strip()
     key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not key or (RUN_MODE != "dry_run" and not token):
-        log("아직 시크릿(THREADS_ACCESS_TOKEN / GEMINI_API_KEY) 설정 전이라 건너뜀")
+    cf_ready = os.environ.get("CF_ACCOUNT_ID", "").strip() and os.environ.get("CF_API_TOKEN", "").strip()
+    if not key or not cf_ready or (RUN_MODE != "dry_run" and not token):
+        log("아직 시크릿(THREADS_ACCESS_TOKEN / GEMINI_API_KEY / CF_ACCOUNT_ID / CF_API_TOKEN) 설정 전이라 건너뜀")
         summary(["설정 대기 중: 시크릿이 아직 없음"])
         return
 
@@ -321,7 +326,7 @@ def main():
     if draft is None:
         data = write_post(today, key)
         log(f"밈: {data.get('trend')} / {data.get('trend_reason')}")
-        img, ext = make_image(data["image_prompt"], key)
+        img, ext = make_image(data["image_prompt"])
         draft = {
             "date": today.isoformat(),
             "trend": data.get("trend"),
